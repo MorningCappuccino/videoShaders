@@ -232,7 +232,7 @@ body { margin: 0 }
 
 			composer.passes[composer.passes.length - 1].renderToScreen = true;
 
-			colorPasses.setColorCube('monochrome');
+			colorPasses.setColorCube('sepia');
 			//
 
 
@@ -279,7 +279,7 @@ body { margin: 0 }
 				// renderer.render( scene, camera Neares
 
 				// render thru composer
-				// composer.render(delta);
+				composer.render(delta);
 				composerGray.render(delta);
 			})
 

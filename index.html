@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>Shaders</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+</head>
+
+<body>
+
+	<script src="js/three.js"></script>
+
+	<script src="js/shaders/CopyShader.js"></script>
+
+	<script src="js/postprocessing/EffectComposer.js"></script>
+	<script src="js/postprocessing/RenderPass.js"></script>
+	<script src="js/postprocessing/MaskPass.js"></script>
+	<script src="js/postprocessing/ShaderPass.js"></script>
+
+	<script src="js/Detector.js"></script>
+
+	<script src="js/threex.coloradjust.js"></script>
+	<!-- <script src="js/threex.videotexture.js"></script> -->
+
+	<video id="video" autoplay loop webkit-playsinline style="display:none">
+			<source src="videos/sintel.mp4">
+		</video>
+
+	<script>
+		if (!Detector.webgl) Detector.addGetWebGLMessage();
+
+		var container;
+
+		var camera, scene, grayscene, renderer, rendererGray;
+
+		var video, texture, material, mesh;
+
+		var composer;
+
+		var mouseX = 0;
+		var mouseY = 0;
+
+		var windowHalfX = window.innerWidth / 2;
+		var windowHalfY = window.innerHeight / 2;
+
+		var cube_count,
+
+			meshes = [],
+			materials = [],
+
+			xgrid = 8,
+			ygrid = 5
+
+		var colorPasses, colorPassesGray, onRenderFcts = [],
+			onRenderFctsGray = [];
+
+		init();
+
+		function init() {
+
+			container = document.createElement('div');
+			document.body.appendChild(container);
+
+			camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 10);
+			camera.position.z = 10;
+
+			scene = new THREE.Scene();
+			grayscene = new THREE.Scene();
+
+			renderer = new THREE.WebGLRenderer({
+				antialias: false
+			});
+			renderer.setPixelRatio(window.devicePixelRatio);
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			container.appendChild(renderer.domElement);
+			//
+			// rendererGray = new THREE.WebGLRenderer( { antialias: false } );
+			// rendererGray.setPixelRatio( window.devicePixelRatio );
+			// rendererGray.setSize( window.innerWidth, window.innerHeight );
+			// container.appendChild( rendererGray.domElement );
+
+			video = document.getElementById('video');
+
+			// texture = new THREE.VideoTexture( video );
+			texture = new THREE.Texture(video);
+			onRenderFcts.push(function() {
+				if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+				texture.needsUpdate = true;
+			})
+			//
+			onRenderFctsGray.push(function() {
+				if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+				texture.needsUpdate = true;
+			})
+			texture.minFilter = THREE.LinearFilter;
+			// texture.magFilter = THREE.LinearFilter;
+			// texture.format = THREE.RGBFormat;
+
+			// trick to work around bugs in the video loop
+			// onRenderFcts.push(function(delta, now){
+			// 	if( video.currentTime === video.duration ){
+			// 		video.src = video.src
+			// 	}
+			// })
+
+			//
+			//
+			// onRenderFcts2.push(function(delta, now){
+			// 	if( video.currentTime === video.duration ){
+			// 		video.src = video.src
+			// 	}
+			// })
+
+			var i, j, ux, uy, ox, oy,
+				geometry,
+				xsize, ysize;
+
+			ux = 1 / xgrid;
+			uy = 1 / ygrid;
+
+			// xsize = 480 / xgrid;
+			// ysize = 204 / ygrid;
+			xsize = 19.2 / xgrid; //19.2/8  =2.4
+			ysize = 10.8 / ygrid; //10.8/5  =2.16
+
+			// var parameters = { /*color: 0xffffff,*/ map: videoTexture.texture };
+			var parameters = { /*color: 0xffffff,*/
+				map: texture
+			};
+
+			cube_count = 0;
+
+			for (i = 0; i < xgrid; i++)
+				for (j = 0; j < ygrid; j++) {
+
+					ox = i;
+					oy = j;
+
+					var x = 0,
+						y = 0;
+					var myShape = new THREE.Shape();
+
+					myShape.moveTo(0, 0);
+					myShape.lineTo(xsize, ysize);
+					myShape.lineTo(xsize, ysize * 2);
+					myShape.lineTo(0, ysize);
+
+					// geometry = new THREE.BoxGeometry( xsize, ysize, xsize );
+					geometry = new THREE.ShapeGeometry(myShape);
+					// geometry = new THREE.CircleGeometry(5, 32);
+
+					change_uvs(geometry, ux, uy, ox, oy);
+
+					// materials[ cube_count ] = new THREE.MeshLambertMaterial( parameters );
+					materials[cube_count] = new THREE.MeshBasicMaterial(parameters);
+
+					material = materials[cube_count];
+
+					material.hue = i / xgrid;
+					// material.hue = 0;
+					material.saturation = 1 - j / ygrid;
+					// material.saturation = 1;
+
+					// material.color.setHSL( material.hue, material.saturation, 0.5 );
+					// material.color.setHSL( 0, 0.1, 0.5 );
+
+					// material.color.set('rgba(128, 128, 128, 1)');
+
+
+					mesh = new THREE.Mesh(geometry, material);
+
+					mesh.position.x = (i - xgrid / 2) * xsize;
+					mesh.position.y = (j - ygrid / 2) * ysize;
+					mesh.position.z = 0;
+
+					// mesh.rotation.x = .4;
+					// mesh.rotation.z = .1;
+
+					mesh.scale.x = mesh.scale.y = mesh.scale.z = 1;
+
+					if (cube_count % 2 == 0) {
+						grayscene.add(mesh);
+					} else {
+						scene.add(mesh);
+					}
+
+
+					mesh.dx = 0.001 * (0.5 - Math.random());
+					mesh.dy = 0.001 * (0.5 - Math.random());
+
+					meshes[cube_count] = mesh;
+
+					cube_count += 1;
+
+				}
+
+			// renderer.autoClear = false;
+
+
+			//////////////////////////////////////////////////////////////////////////////////
+			//		colorPasses							//
+			//////////////////////////////////////////////////////////////////////////////////
+
+			colorPasses = new THREEx.ColorAdjust.Passes();
+
+			onRenderFcts.push(function(delta, now) {
+				// texture.needsUpdate	= true;
+				colorPasses.update(delta, now)
+			});
+
+			//
+
+			colorPassesGray = new THREEx.ColorAdjust.Passes();
+
+			onRenderFctsGray.push(function(delta, now) {
+				// texture.needsUpdate	= true;
+				colorPassesGray.update(delta, now)
+			});
+
+			//////////////////////////////////////////////////////////////////////////////////
+			//		EffectComposer							//
+			//////////////////////////////////////////////////////////////////////////////////
+
+			var composer = new THREE.EffectComposer(renderer);
+			var renderPass = new THREE.RenderPass(scene, camera);
+			composer.addPass(renderPass);
+
+			colorPasses.addPassesTo(composer);
+
+			composer.passes[composer.passes.length - 1].renderToScreen = true;
+
+			// colorPasses.setColorCube('monochrome');
+			//
+
+
+
+			//
+
+			var composerGray = new THREE.EffectComposer(renderer);
+			var renderPassGray = new THREE.RenderPass(grayscene, camera);
+			composerGray.addPass(renderPassGray);
+
+			colorPassesGray.addPassesTo(composerGray);
+			// composerGray.addPass(colorPassesGray);
+
+			composerGray.passes[composerGray.passes.length - 1].renderToScreen = true;
+
+			colorPassesGray.setColorCube('monochrome');
+
+			//
+
+
+			window.addEventListener('resize', onWindowResize, false);
+
+			//
+			// to pause the video on click
+			document.querySelector('canvas').addEventListener('click', function(event) {
+				console.log('Video paused.')
+				if (video.paused) {
+					video.play()
+				} else {
+					video.pause()
+				}
+			}, false)
+
+			//pause video in 1 sec
+			setTimeout(function() {
+				document.querySelector('canvas').click();
+			}, 15000);
+
+			//////////////////////////////////////////////////////////////////////////////////
+			//		render the scene						//
+			//////////////////////////////////////////////////////////////////////////////////
+			onRenderFcts.push(function(delta, now) {
+				// disable rendering directly thru renderer
+				// renderer.render( scene, camera Neares
+
+				// render thru composer
+				// composer.render(delta);
+				composerGray.render(delta);
+			})
+
+			//
+			// onRenderFctsGray.push(function(delta, now){
+			// composerGray.render(delta);
+			// })
+
+
+		}
+
+		function onWindowResize() {
+
+			windowHalfX = window.innerWidth / 2;
+			windowHalfY = window.innerHeight / 2;
+
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			composer.reset();
+
+		}
+
+		function change_uvs(geometry, unitx, unity, offsetx, offsety) {
+
+			var faceVertexUvs = geometry.faceVertexUvs[0];
+
+			for (var i = 0; i < faceVertexUvs.length; i++) {
+
+				var uvs = faceVertexUvs[i];
+
+				for (var j = 0; j < uvs.length; j++) {
+
+					var uv = uvs[j];
+
+					uv.x = (uv.x + offsetx) * unitx;
+					uv.y = (uv.y + offsety) * unity;
+
+				}
+
+			}
+
+		}
+
+
+		function onDocumentMouseMove(event) {
+
+			mouseX = (event.clientX - windowHalfX);
+			mouseY = (event.clientY - windowHalfY) * 0.3;
+
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////
+		//		loop runner							//
+		//////////////////////////////////////////////////////////////////////////////////
+		var lastTimeMsec = null
+		requestAnimationFrame(function animate(nowMsec) {
+			// keep looping
+			requestAnimationFrame(animate);
+			// measure time
+			lastTimeMsec = lastTimeMsec || nowMsec - 1000 / 60
+			var deltaMsec = Math.min(200, nowMsec - lastTimeMsec)
+			lastTimeMsec = nowMsec
+			// call each update function
+			onRenderFcts.forEach(function(updateFn) {
+				updateFn(deltaMsec / 1000, nowMsec / 1000)
+			});
+			//
+			onRenderFctsGray.forEach(function(updateFn) {
+				updateFn(deltaMsec / 1000, nowMsec / 1000)
+			})
+		})
+	</script>
+
+</body>
+
+</html>

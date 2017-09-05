@@ -2,7 +2,7 @@ var THREEx	= THREEx	|| {};
 
 THREEx.ColorAdjust	= {}
 
-THREEx.ColorAdjust.baseURL	= '../'
+THREEx.ColorAdjust.baseURL	= ''
 
 THREEx.ColorAdjust.colorCubes	= {
 	'default'		: 'images/default.png',
